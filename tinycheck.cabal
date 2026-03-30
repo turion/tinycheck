@@ -1,37 +1,37 @@
-cabal-version:      3.0
-name:               tinycheck
-version:            0.1.0.0
+cabal-version: 3.0
+name: tinycheck
+version: 0.1.0.0
 -- synopsis:
 -- description:
-license:            BSD-3-Clause
-license-file:       LICENSE
-author:             Manuel Bärenz
-maintainer:         programming@manuelbaerenz.de
+license: BSD-3-Clause
+license-file: LICENSE
+author: Manuel Bärenz
+maintainer: programming@manuelbaerenz.de
 -- copyright:
-build-type:         Simple
-extra-doc-files:    CHANGELOG.md
--- extra-source-files:
+build-type: Simple
+extra-doc-files: CHANGELOG.md
 
-common warnings
-    ghc-options: -Wall
+-- extra-source-files:
+common opts
+  ghc-options: -Wall
+  default-extensions:
+    DefaultSignatures
+    DerivingVia
+    DerivingStrategies
 
 library
-    import:           warnings
-    exposed-modules:  MyLib
-    -- other-modules:
-    -- other-extensions:
-    build-depends:    base ^>=4.18.3.0
-    hs-source-dirs:   src
-    default-language: GHC2021
+  import: opts
+  exposed-modules: Data.TestCases
+  build-depends: base ^>=4.18.3.0
+  hs-source-dirs: src
+  default-language: GHC2021
 
 test-suite tinycheck-test
-    import:           warnings
-    default-language: GHC2021
-    -- other-modules:
-    -- other-extensions:
-    type:             exitcode-stdio-1.0
-    hs-source-dirs:   test
-    main-is:          Main.hs
-    build-depends:
-        base ^>=4.18.3.0,
-        tinycheck
+  import: opts
+  default-language: GHC2021
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends:
+    base ^>=4.18.3.0,
+    tinycheck,

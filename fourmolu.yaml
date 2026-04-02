@@ -1,0 +1,4 @@
+indentation: 2
+indent-wheres: true
+record-brace-space: true
+haddock-style: multi-line

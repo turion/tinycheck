@@ -39,6 +39,17 @@ module Data.TestCases (
   digitChars,
   inCategories,
 
+  -- ** Newtype wrappers for common char/string generators
+  Printable (..),
+  Letter (..),
+  Digit (..),
+  Upper (..),
+  Lower (..),
+  AsciiWord (..),
+  LetterWord (..),
+  DigitWord (..),
+  AsciiLine (..),
+
   -- * CoArbitrary
   CoArbitrary (..),
 
@@ -178,12 +189,12 @@ Works correctly when sources have different lengths or are infinite:
 @'interleaveN' [a, b] == a '<>' b@.
 -}
 interleaveN :: [TestCases a] -> TestCases a
-interleaveN = TestCases . go . map getTestCases
+interleaveN = TestCases . go . fmap getTestCases
   where
     go [] = []
     go xss =
       let (heads, tails') = foldr collect ([], []) xss
-       in heads ++ go tails'
+       in (heads <> go tails')
     collect [] (hs, ts) = (hs, ts)
     collect (x : xs) (hs, ts) = (x : hs, xs : ts)
 
@@ -275,8 +286,8 @@ instance (Fractional a, Enum a) => Arbitrary (RealFracArbitrary a) where
   arbitrary =
     coerce $
       TestCases [0, 1, -1, 0.5, -0.5, 2, -2 :: a]
-        <> TestCases [1 / n | n <- [2 ..]]
-        <> (negate <$> TestCases [1 / n | n <- [2 ..]])
+        <> TestCases ((\ n -> 1 / n) <$> [2 .. ])
+        <> (negate <$> TestCases ((\ n -> 1 / n) <$> [2 .. ]))
 
 -- Numeric instances
 -- Signed integer types: interleave non-negatives and negatives.
@@ -318,7 +329,7 @@ deriving via RealFracArbitrary Double instance Arbitrary Double
 This is the most general 'Char' generator and is used for the 'Arbitrary' instance.
 -}
 allChars :: TestCases Char
-allChars = TestCases $ map chr ([0 .. 0xD7FF] ++ [0xE000 .. 0x10FFFF])
+allChars = TestCases $ fmap chr ([0 .. 0xD7FF] <> [0xE000 .. 0x10FFFF])
 
 -- | Filter a 'Char' generator to only those characters whose Unicode 'GeneralCategory' is in the supplied list.
 inCategories :: [GeneralCategory] -> TestCases Char -> TestCases Char
@@ -372,6 +383,63 @@ letterChars =
 -- | Only Unicode decimal digits.
 digitChars :: TestCases Char
 digitChars = inCategories [DecimalNumber] allChars
+
+-- ** Newtype wrappers for common char\/string generators
+
+{- | A printable Unicode character.
+Useful when a test only cares that a character is printable.
+-}
+newtype Printable = Printable Char deriving stock (Show)
+
+instance Arbitrary Printable where arbitrary = Printable <$> printableChars
+
+-- | A Unicode letter ('UppercaseLetter', 'LowercaseLetter', etc.).
+newtype Letter = Letter Char deriving stock (Show)
+
+instance Arbitrary Letter where arbitrary = Letter <$> letterChars
+
+-- | A Unicode decimal digit.
+newtype Digit = Digit Char deriving stock (Show)
+
+instance Arbitrary Digit where arbitrary = Digit <$> digitChars
+
+-- | An uppercase Unicode letter.
+newtype Upper = Upper Char deriving stock (Show)
+
+instance Arbitrary Upper where arbitrary = Upper <$> inCategories [UppercaseLetter] allChars
+
+-- | A lowercase Unicode letter.
+newtype Lower = Lower Char deriving stock (Show)
+
+instance Arbitrary Lower where arbitrary = Lower <$> inCategories [LowercaseLetter] allChars
+
+{- | A string of words drawn from 'asciiChars'.
+Words are separated by spaces; no leading or trailing space is guaranteed.
+-}
+newtype AsciiWord = AsciiWord String deriving stock (Show)
+
+instance Arbitrary AsciiWord where arbitrary = AsciiWord <$> wordsOf asciiChars
+
+{- | A string of words made up of Unicode letters.
+Words are separated by spaces.
+-}
+newtype LetterWord = LetterWord String deriving stock (Show)
+
+instance Arbitrary LetterWord where arbitrary = LetterWord <$> wordsOf letterChars
+
+{- | A string of words made up of Unicode decimal digits.
+Words are separated by spaces.
+-}
+newtype DigitWord = DigitWord String deriving stock (Show)
+
+instance Arbitrary DigitWord where arbitrary = DigitWord <$> wordsOf digitChars
+
+{- | A multi-line string drawn from 'asciiChars'.
+Useful for testing parsers and text-processing functions.
+-}
+newtype AsciiLine = AsciiLine String deriving stock (Show)
+
+instance Arbitrary AsciiLine where arbitrary = AsciiLine <$> linesOf asciiChars
 
 instance Arbitrary Char where
   arbitrary = allChars

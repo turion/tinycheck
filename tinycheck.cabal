@@ -64,6 +64,13 @@ test-suite tinycheck-test
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
+  other-modules:
+    Test.Base
+    Test.Combinators
+    Test.Generic
+    Test.HybridSort
+    Test.Strings
+
   build-depends: tinycheck
 
 test-suite example-colour

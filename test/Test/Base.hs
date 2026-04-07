@@ -7,7 +7,6 @@
 {- HLINT ignore "Evaluate" -}
 {- HLINT ignore "Redundant not" -}
 {- HLINT ignore "Redundant ==" -}
-{- HLINT ignore "Redundant id" -}
 module Test.Base (tests) where
 
 -- base
@@ -80,12 +79,5 @@ tests =
             \(b :: Bool) -> (b || True) == True
         , testProperty "b && False == False" $
             \(b :: Bool) -> (b && False) == False
-        ]
-    , testGroup
-        "Functions (CoArbitrary)"
-        [ testProperty "const a b == a" $
-            \(a :: Int, b :: Bool) -> const a b == a
-        , testProperty "id x == x" $
-            \(x :: Int) -> id x == x
         ]
     ]

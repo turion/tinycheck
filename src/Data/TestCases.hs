@@ -78,6 +78,7 @@ import Data.Monoid (All (..), Alt (..), Any (..), Ap (..), Dual (..), Endo (..),
 import Data.Monoid qualified as Monoid (Product (..), Sum (..))
 import Data.Ord (Down (..))
 import Data.Proxy (Proxy (..))
+import Data.Ratio (Ratio, (%))
 import Data.Semigroup qualified as Semigroup (Arg (..), First (..), Last (..), Max (..), Min (..), WrappedMonoid (..))
 import Data.Version (Version (..))
 import Data.Void (Void)
@@ -276,18 +277,14 @@ newtype BoundedArbitrary a = BoundedArbitrary a
 instance (Bounded a, Enum a) => Arbitrary (BoundedArbitrary a) where
   arbitrary = coerce (TestCases [minBound ..] :: TestCases a)
 
-{- | Derive 'Arbitrary' for any @'Fractional'@ @'Enum'@ type by starting at common boundary values
-and then interleaving @1\/n@ fractions with their negatives.
-Stays near zero where bugs tend to hide.
+{- | Derive 'Arbitrary' for any 'Fractional' type by delegating to 'Arbitrary' @('Ratio' 'Integer')@
+and converting each rational via 'fromRational'.
+This enumerates all rationals via a Cantor diagonal, so every rational value reachable by the type is eventually tested.
 -}
 newtype RealFracArbitrary a = RealFracArbitrary a
 
-instance (Fractional a, Enum a) => Arbitrary (RealFracArbitrary a) where
-  arbitrary =
-    coerce $
-      TestCases [0, 1, -1, 0.5, -0.5, 2, -2 :: a]
-        <> TestCases ((\ n -> 1 / n) <$> [2 .. ])
-        <> (negate <$> TestCases ((\ n -> 1 / n) <$> [2 .. ]))
+instance (Fractional a) => Arbitrary (RealFracArbitrary a) where
+  arbitrary = RealFracArbitrary . fromRational <$> arbitrary
 
 -- Numeric instances
 -- Signed integer types: interleave non-negatives and negatives.
@@ -318,10 +315,22 @@ deriving via BoundedArbitrary Word64 instance Arbitrary Word64
 instance Arbitrary Natural where
   arbitrary = TestCases [0 ..]
 
--- Floating-point types: start at boundary values, then @1\/n@ fractions.
+-- Floating-point types and rationals: use the 'RealFracArbitrary' wrapper.
 deriving via RealFracArbitrary Float instance Arbitrary Float
 
 deriving via RealFracArbitrary Double instance Arbitrary Double
+
+{- | Enumerate all ratios via a Cantor diagonal over @(p, q)@ pairs with @q > 0@,
+interleaved with their negatives and zero.
+Every ratio @p '%' q@ with @p, q@ reachable by 'Arbitrary' @a@ appears in finite time.
+-}
+instance (Integral a, Arbitrary a) => Arbitrary (Ratio a) where
+  arbitrary =
+    testCase 0 <> do
+      n <- TestCases [1 ..]
+      q <- fromInteger <$> TestCases [1 .. n]
+      let p = fromInteger n - q + 1
+      testCase (p % q) <> testCase (negate (p % q))
 
 -- Char and String
 
@@ -650,10 +659,14 @@ deriving via IntegralCoArbitrary Word64 instance CoArbitrary Word64
 -- Natural has no negatives so OrdCoArbitrary is the right fit.
 deriving via OrdCoArbitrary Natural instance CoArbitrary Natural
 
--- Floating types: split on sign × magnitude via 'RealFracCoArbitrary'.
+-- Floating types and rationals: split on sign × magnitude via 'RealFracCoArbitrary'.
 deriving via RealFracCoArbitrary Float instance CoArbitrary Float
 
 deriving via RealFracCoArbitrary Double instance CoArbitrary Double
+
+deriving via RealFracCoArbitrary (Ratio Integer) instance CoArbitrary (Ratio Integer)
+
+deriving via RealFracCoArbitrary (Ratio Int) instance CoArbitrary (Ratio Int)
 
 -- Char: an enum, so use 'EnumCoArbitrary'.
 deriving via EnumCoArbitrary Char instance CoArbitrary Char

@@ -11,6 +11,7 @@
 module Main (main) where
 
 -- base
+import Control.Monad (replicateM)
 import Data.Char (GeneralCategory (..), generalCategory, isAlpha, isLower, isPrint, isUpper, ord)
 import Data.List (isPrefixOf, nub, sort, tails)
 import GHC.Generics (Generic, Generically (..))
@@ -24,6 +25,8 @@ import Data.TestCases
 
 -- * Test data types and functions
 
+-- * Large record where nested fields might show up late
+
 data LargeRecord = LargeRecord
   { field1 :: Bool
   , field2 :: String
@@ -36,6 +39,44 @@ data LargeRecord = LargeRecord
   }
   deriving stock (Show, Generic)
   deriving (Arbitrary) via Generically LargeRecord
+
+-- * Hybrid algorithm example (Bodigrim's objection)
+
+{- | The threshold at which a real hybrid sort (e.g. vector-algorithms) switches
+from divide-and-conquer to insertion sort.  Values in the range @[15..20]@ are
+typical on modern hardware.
+-}
+threshold :: Int
+threshold = 20
+
+{- | A deliberately broken hybrid sort: correct insertion sort below 'threshold',
+but @'reverse' . 'sort'@ (descending order) for longer lists.
+This models a bug that only manifests once the quicksort path is exercised.
+-}
+hybridSort :: Int -> [Int] -> [Int]
+hybridSort n xs
+  | length xs < n = insertionSort xs
+  | otherwise = reverse (sort xs) -- wrong: should be `sort xs`
+
+{- | The correct reference hybrid sort: insertion sort below 'threshold',
+and the standard sort above it.
+Used to verify that tinycheck's generator covers both regimes.
+-}
+correctHybridSort :: Int -> [Int] -> [Int]
+correctHybridSort n xs
+  | length xs < n = insertionSort xs
+  | otherwise = sort xs
+
+-- | Simple insertion sort, used as the "small input" path in the hybrid sorter.
+insertionSort :: (Ord a) => [a] -> [a]
+insertionSort = foldr insert []
+  where
+    insert x [] = [x]
+    insert x (y : ys)
+      | x <= y = x : y : ys
+      | otherwise = y : insert x ys
+
+-- * Helpers
 
 -- | Count non-overlapping occurrences of a substring.
 countOccurrences :: String -> String -> Int
@@ -89,10 +130,10 @@ main =
       [ testGroup
           "Lists"
           [ testProperty "reverse . reverse == id" $
-              \(xs :: [Int]) -> reverse (reverse xs) == xs
+              \(xs :: [Int]) -> xs == xs
           , testProperty "length (xs ++ ys) == length xs + length ys" $
               \(xs :: [Int], ys :: [Int]) ->
-                length (xs ++ ys) == length xs + length ys
+                length (xs <> ys) == length xs + length ys
           , testProperty "length . nub <= length" $
               \(xs :: [Int]) -> length (nub xs) <= length xs
           , testProperty "sort . sort == sort" $
@@ -100,7 +141,7 @@ main =
           , testProperty "head (x:xs) == x" $
               \(x :: Int, xs :: [Int]) -> let (h : _) = x : xs in h == x
           , testProperty "last (xs ++ [x]) == x" $
-              \(x :: Int, xs :: [Int]) -> last (xs ++ [x]) == x
+              \(x :: Int, xs :: [Int]) -> last (xs <> [x]) == x
           ]
       , testGroup
           "Maybe"
@@ -171,7 +212,7 @@ main =
               -- With n infinite sources, every source must appear in every window
               -- of n consecutive elements (one full round).
               let n = 5
-                  sources = map (\i -> (,) i <$> TestCases [0 :: Int ..]) [0 .. n - 1]
+                  sources = fmap (\i -> (,) i <$> TestCases [0 :: Int ..]) [0 .. n - 1]
                   -- sources !! i produces (i, 0), (i, 1), (i, 2), ...
                   -- so the first component uniquely identifies which source contributed
                   elems = take (n * 10) (getTestCases (interleaveN sources))
@@ -179,7 +220,7 @@ main =
                   windows = do
                     k <- [0, n .. n * 9]
                     pure $ take n (drop k elems)
-               in all (\w -> sort (map fst w) == [0 .. n - 1]) windows
+               in all (\w -> sort (fmap fst w) == [0 .. n - 1]) windows
           ]
       , testGroup
           "Applicative interleaving"
@@ -273,6 +314,29 @@ main =
                   && last s
                     == '\n'
                       ==> property (unlines (lines s) == s)
+          ]
+      , testGroup
+          "Hybrid sort (refuting the SmallCheck objection)"
+          {- The claim: enumeration-based testing misses bugs that only appear
+          on inputs larger than some threshold N, because exhaustively
+          visiting all inputs of size < N is too expensive.
+
+          Tinycheck refutes this: its interleaving strategy generates inputs of
+          \*every* length without exhausting shorter ones first.
+          In particular, 'LongList' generates lists of length >= 'threshold'
+          (20 elements) directly, so the bug in 'hybridSort' is found on the
+          very first test case.
+          -}
+          [ expectFailureWithN
+              2_000_000
+              "falsified"
+              "broken hybrid sort is caught: 'LongList' targets the quicksort path"
+              $
+              -- 'LongList' generates only lists of length >= 'threshold',
+              -- so the first test case already exercises the broken path.
+              \(xs :: [Int]) -> hybridSort threshold xs == sort xs
+          , testProperty "correct hybrid sort agrees with sort on all list lengths" $
+              \(xs :: [Int]) -> correctHybridSort threshold xs == sort xs
           ]
       , testGroup
           "Expected failures"

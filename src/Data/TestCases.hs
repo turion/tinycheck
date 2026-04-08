@@ -34,7 +34,7 @@ module Data.TestCases (
 
   -- ** Char generators
   allChars,
-  asciiChars,
+  commonASCIIChars,
   printableChars,
   letterChars,
   digitChars,
@@ -232,6 +232,10 @@ As a result infinite generators compose without starvation.
 instance Monad TestCases where
   as >>= f = foldMap f as
 
+-- | Generate lists of at least @n@ elements.
+atLeast :: (Arbitrary a) => Int -> TestCases [a]
+atLeast n = (<>) <$> replicateM n arbitrary <*> arbitrary
+
 -- * Running tests (plain IO)
 
 {- | Run a named test over (up to) 10 million generated cases.
@@ -348,8 +352,8 @@ inCategories cats (TestCases cs) = TestCases $ filter ((`elem` cats) . generalCa
 {- | ASCII letters and digits plus common punctuation and whitespace.
 Useful for testing with printable ASCII.
 -}
-asciiChars :: TestCases Char
-asciiChars = TestCases $ ['a' .. 'z'] <> ['A' .. 'Z'] <> ['0' .. '9'] <> " !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+commonASCIIChars :: TestCases Char
+commonASCIIChars = TestCases $ ['a' .. 'z'] <> ['A' .. 'Z'] <> ['0' .. '9'] <> " !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
 {- | All printable Unicode characters (letters, marks, numbers, punctuation,
 symbols, and space separators).
@@ -423,12 +427,12 @@ newtype Lower = Lower Char deriving stock (Show)
 
 instance Arbitrary Lower where arbitrary = Lower <$> inCategories [LowercaseLetter] allChars
 
-{- | A string of words drawn from 'asciiChars'.
+{- | A string of words drawn from 'commonASCIIChars'.
 Words are separated by spaces; no leading or trailing space is guaranteed.
 -}
 newtype AsciiWord = AsciiWord String deriving stock (Show)
 
-instance Arbitrary AsciiWord where arbitrary = AsciiWord <$> wordsOf asciiChars
+instance Arbitrary AsciiWord where arbitrary = AsciiWord <$> wordsOf commonASCIIChars
 
 {- | A string of words made up of Unicode letters.
 Words are separated by spaces.
@@ -444,12 +448,12 @@ newtype DigitWord = DigitWord String deriving stock (Show)
 
 instance Arbitrary DigitWord where arbitrary = DigitWord <$> wordsOf digitChars
 
-{- | A multi-line string drawn from 'asciiChars'.
+{- | A multi-line string drawn from 'commonASCIIChars'.
 Useful for testing parsers and text-processing functions.
 -}
 newtype AsciiLine = AsciiLine String deriving stock (Show)
 
-instance Arbitrary AsciiLine where arbitrary = AsciiLine <$> linesOf asciiChars
+instance Arbitrary AsciiLine where arbitrary = AsciiLine <$> linesOf commonASCIIChars
 
 instance Arbitrary Char where
   arbitrary = allChars
@@ -472,10 +476,6 @@ linesOf chars = wordsOf chars <> foldMap (\k -> unlines . fmap unwords <$> repli
 -- | A 'String' generator using 'allChars': single strings, multi-word, and multi-line strings.
 string :: TestCases String
 string = linesOf allChars
-
--- | Generate strings of at least @n@ characters.
-atLeast :: Int -> TestCases String
-atLeast n = (<>) <$> replicateM n arbitrary <*> arbitrary
 
 -- Other base types
 instance Arbitrary () where arbitrary = pure ()

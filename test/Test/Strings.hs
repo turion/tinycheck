@@ -29,18 +29,18 @@ tests =
         \(Lower c) -> isLower c
     , testProperty "inCategories respects generalCategory" $
         \(Digit c) -> generalCategory c == DecimalNumber
-    , testProperty "wordsOf asciiChars: every non-space char is printable ASCII" $
+    , testProperty "wordsOf commonASCIIChars: every non-space char is printable ASCII" $
         \(AsciiWord s) -> all (\c -> isPrint c && ord c < 128) (filter (/= ' ') s)
     , testProperty "wordsOf letterChars: every non-space char is a letter" $
         \(LetterWord s) -> all isAlpha (filter (/= ' ') s)
     , testProperty "wordsOf digitChars: every char is a decimal digit or space" $
         \(DigitWord s) -> all (\c -> generalCategory c == DecimalNumber || c == ' ') s
-    , testProperty "wordsOf asciiChars: unwords . words roundtrips when no leading/trailing spaces" $
+    , testProperty "wordsOf commonASCIIChars: unwords . words roundtrips when no leading/trailing spaces" $
         \(AsciiWord s) ->
           case (s, reverse s) of
             (h : _, l : _) -> h /= ' ' && l /= ' ' ==> property (unwords (words s) == s)
             _ -> property True
-    , testProperty "linesOf asciiChars: lines . unlines roundtrips when ends with newline" $
+    , testProperty "linesOf commonASCIIChars: lines . unlines roundtrips when ends with newline" $
         \(AsciiLine s) ->
           not (null s)
             && last s

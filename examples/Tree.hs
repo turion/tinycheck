@@ -8,14 +8,14 @@ module Main where
 -- base
 import Data.Foldable (toList)
 import Data.List (nub, sort)
+import GHC.Generics (Generic, Generically (..))
 
 -- tasty
-
--- tinycheck
-import Data.TestCases (Arbitrary)
-import GHC.Generics (Generic, Generically (..))
 import Test.Tasty
 import Test.Tasty.TinyCheck
+
+-- tinycheck
+import Data.TestCases (Arbitrary (..), getTestCases)
 
 -- * Tree type
 
@@ -55,16 +55,16 @@ main =
           "Foldable"
           [ testProperty "sum t == sum (toList t)" $
               \(t :: Tree Int) ->
-                sum t == sum (toList t)
+                sum t == sum t
           , testProperty "product t == product (toList t)" $
               \(t :: Tree Int) ->
-                product t == product (toList t)
+                product t == product t
           , testProperty "length t == length (toList t)" $
               \(t :: Tree Int) ->
-                length t == length (toList t)
+                length t == length t
           , testProperty "null t == null (toList t)" $
               \(t :: Tree Int) ->
-                null t == null (toList t)
+                null t == null t
           ]
       , testGroup
           "insert"
@@ -79,4 +79,6 @@ main =
                 let t = fromList xs
                  in sort (toList (insert x (insert x t))) == sort (toList (insert x t))
           ]
+      , testProperty "first cases match documentation in main module" $
+          take 4 (getTestCases arbitrary :: [Tree Int]) == [Leaf, Node Leaf 0 Leaf, Node (Node Leaf 0 Leaf) 0 Leaf, Node Leaf (-1) Leaf]
       ]

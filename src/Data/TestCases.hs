@@ -118,6 +118,9 @@ With two infinite sides, both are explored fairly:
 > (Left <$> TestCases [1..]) <> (Right <$> TestCases [1..])
 >   == TestCases [Left 1, Right 1, Left 2, Right 2, Left 3, Right 3, ...]
 
+In practice, this means that all different /shapes/ of data can be explored early,
+before all values of one shape are exhausted.
+
 === Applicative and Monad
 
 'Applicative' is derived from 'Monad' via @('<*>') = 'ap'@, and 'Monad'
@@ -153,14 +156,13 @@ For example:
 >   == TestCases [1] <> TestCases [2,3]
 >   == TestCases [1,2,3]
 
-Consequently the 'Applicative' and 'Monad' laws (which depend on associativity of bind) also
-fail.
+Consequently the 'Applicative' and 'Monad' laws (which depend on associativity of bind) also fail.
 
 In practice this does not matter much: a property test only cares whether /all/
-generated cases pass, not about the order in which they are visited.  Any
-permutation of the input list yields the same test outcome.  The interleaving
-strategy is chosen purely to ensure that no generator is starved, not to
-produce any canonical ordering.
+generated cases pass, not about the order in which they are visited.
+Any permutation of the input list yields the same test outcome.  The interleaving
+strategy is chosen purely to ensure that each case is visited early and no generator is starved,
+not to produce any canonical ordering.
 
 You can use this fact to your advantage:
 if you want to visit some cases earlier,
@@ -176,8 +178,8 @@ testCase = TestCases . pure
 
 {- | Fairly interleave any number of 'TestCases'.
 
-Each round takes one element from each non-empty source in order, then
-repeats with the remaining tails.  Empty sources are skipped.
+Each round takes one element from each non-empty source in order,
+then repeats with the remaining tails.  Empty sources are skipped.
 This generalises '<>' from two sources to @n@ sources:
 
 > interleaveN [TestCases [1,2,3], TestCases [10,20,30], TestCases [100,200,300]]
@@ -239,7 +241,9 @@ atLeast n = (<>) <$> replicateM n arbitrary <*> arbitrary
 -- * Running tests (plain IO)
 
 {- | Run a named test over (up to) 10 million generated cases.
+
 Throws an error on the first failure, printing the failing input and a debug string.
+For proper integration into a testing framework, see "Test.Tasty.TinyCheck".
 -}
 testWithMsg :: (Show a, Arbitrary a) => String -> (a -> (Bool, String)) -> IO ()
 testWithMsg msg f = do
@@ -261,7 +265,26 @@ test msg f = testWithMsg msg (\a -> (f a, ""))
 
 -- * Arbitrary
 
--- | Class of types that have a canonical enumeration of test cases.
+{- | Class of types that have a canonical enumeration of test cases.
+
+For any type with a 'GHC.Generics.Generic' instance, you can derive 'Arbitrary' for free via 'Generically':
+
+@
+data Colour = Red | Green | Blue deriving ('GHC.Generics.Generic')
+
+deriving via 'Generically' Colour instance 'Arbitrary' Colour
+-- generates: TestCases [Red, Green, Blue]
+@
+
+For types with fields, the fields\' generators are interleaved fairly:
+
+@
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving ('GHC.Generics.Generic')
+
+deriving via 'Generically' (Tree a) instance ('Arbitrary' a) => 'Arbitrary' (Tree a)
+-- generates: Leaf, Node Leaf 0 Leaf, Node (Node Leaf 0 Leaf) 0 Leaf, Node Leaf (-1) Leaf, ...
+@
+-}
 class Arbitrary a where
   arbitrary :: TestCases a
 

@@ -178,8 +178,9 @@ testCase = TestCases . pure
 
 {- | Fairly interleave any number of 'TestCases'.
 
-Each round takes one element from each non-empty source in order,
-then repeats with the remaining tails.  Empty sources are skipped.
+Each round emits one element from each non-empty source in order, then repeats with the remaining tails.
+Empty sources are skipped.
+Elements are emitted one at a time, so the output is productive even when sources are built recursively.
 This generalises '<>' from two sources to @n@ sources:
 
 > interleaveN [TestCases [1,2,3], TestCases [10,20,30], TestCases [100,200,300]]
@@ -196,11 +197,13 @@ interleaveN :: [TestCases a] -> TestCases a
 interleaveN = TestCases . go . fmap getTestCases
   where
     go [] = []
-    go xss =
-      let (heads, tails') = foldr collect ([], []) xss
-       in (heads <> go tails')
-    collect [] (hs, ts) = (hs, ts)
-    collect (x : xs) (hs, ts) = (x : hs, xs : ts)
+    go xss = step xss []
+    -- Emit one head from each non-empty source, accumulating the non-empty tails,
+    -- then recurse.  Emitting is done one element at a time so that the output
+    -- is productive even when the source list is built recursively.
+    step [] acc = go (reverse acc)
+    step ([] : xss) acc = step xss acc
+    step ((x : xs) : xss) acc = x : step xss (xs : acc)
 
 {- | Interleave two 'TestCases' so that neither side starves the other.
 This is the key operation: it lets us combine two (potentially infinite) generators and still visit cases from both.

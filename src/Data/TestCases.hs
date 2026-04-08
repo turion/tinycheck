@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {- | A lightweight enumeration-based property testing library.
@@ -87,6 +89,10 @@ import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Generics
 import Numeric.Natural (Natural)
 import System.Exit (ExitCode (..))
+
+-- generics-sop
+import Generics.SOP qualified as SOP
+import Generics.SOP.GGP qualified as SOP (GCode, GFrom, GTo, gfrom, gto)
 
 -- * TestCases
 
@@ -530,31 +536,42 @@ deriving via Generically (a, b, c, d, e) instance (Arbitrary a, Arbitrary b, Arb
 instance (CoArbitrary a, Arbitrary b) => Arbitrary (a -> b) where
   arbitrary = coArbitrary
 
-{- | Route 'Arbitrary' through the generic representation.
+{- | Route 'Arbitrary' through the SOP generic representation.
 Use @deriving ('Arbitrary') via 'Generically' MyType@ to get a free instance
-for any 'Generic' type.
+for any 'GHC.Generics.Generic' type.
 -}
-instance (Generic a, Arbitrary (Rep a ())) => Arbitrary (Generically a) where
-  arbitrary = fmap (Generically . to) (arbitrary :: TestCases (Rep a ()))
+instance (SOP.GTo a, Generic a, Arbitrary (SOP.SOP SOP.I (SOP.GCode a))) => Arbitrary (Generically a) where
+  arbitrary = fmap (Generically . SOP.gto) arbitrary
 
-instance (Arbitrary (fL x), Arbitrary (fR x)) => Arbitrary ((fL :+: fR) x) where
-  arbitrary = (L1 <$> arbitrary) <> (R1 <$> arbitrary)
+-- ** generics-sop NP/NS/SOP/I instances
 
-instance (Arbitrary (fL x), Arbitrary (fR x)) => Arbitrary ((fL :*: fR) x) where
-  arbitrary = (:*:) <$> arbitrary <*> arbitrary
+-- | The identity functor: delegate to the wrapped type.
+instance (Arbitrary a) => Arbitrary (SOP.I a) where
+  arbitrary = SOP.I <$> arbitrary
 
-instance (Arbitrary (f x)) => Arbitrary (M1 i t f x) where
-  arbitrary = M1 <$> arbitrary
+{- | Generate all fields independently and combine them into a product.
+Sequences one 'arbitrary' call per position,
+using 'SOP.hcpure' with the 'Compose' constraint and then 'SOP.hsequence''.
+-}
+instance (SOP.All (SOP.Compose Arbitrary f) xs) => Arbitrary (SOP.NP f xs) where
+  arbitrary = SOP.hsequence' $ SOP.hcpure (Proxy @(SOP.Compose Arbitrary f)) (SOP.Comp arbitrary)
 
-instance (Arbitrary a) => Arbitrary (K1 i a x) where
-  arbitrary = K1 <$> arbitrary
+{- | Generate one constructor choice by interleaving all injections.
+Each constructor is given equal weight via 'interleaveN'.
+-}
+instance (SOP.All (SOP.Compose Arbitrary f) xs) => Arbitrary (SOP.NS f xs) where
+  arbitrary =
+    interleaveN
+      . fmap SOP.hsequence'
+      . SOP.apInjs_NP
+      $ SOP.hcpure (Proxy @(SOP.Compose Arbitrary f)) (SOP.Comp arbitrary)
 
-instance Arbitrary (U1 x) where
-  arbitrary = pure U1
-
--- | 'V1' is the empty type (no constructors), so it has no test cases.
-instance Arbitrary (V1 x) where
-  arbitrary = TestCases []
+{- | A sum-of-products: delegate to the underlying 'SOP.NS'.
+The 'Arbitrary (SOP.NS (SOP.NP f) xss)' constraint is discharged
+by the 'Arbitrary (SOP.NS f xs)' instance above.
+-}
+instance (Arbitrary (SOP.NS (SOP.NP f) xss)) => Arbitrary (SOP.SOP f xss) where
+  arbitrary = SOP.SOP <$> arbitrary
 
 {- | Derive 'CoArbitrary' for any @'Ord' a@ by doing a three-way split on @'compare' argument pivot@ for each generated pivot.
 This means the generated function can return different outputs for values below, equal to, or above the pivot.
@@ -707,38 +724,45 @@ deriving via Generically (a, b, c) instance (CoArbitrary a, CoArbitrary b, CoArb
 
 deriving via Generically (a, b, c, d) instance (CoArbitrary a, CoArbitrary b, CoArbitrary c, CoArbitrary d) => CoArbitrary (a, b, c, d)
 
-{- | Route 'CoArbitrary' through the generic representation.
-Use @deriving ('CoArbitrary') via 'Generically' MyType@ for any 'Generic' type.
+{- | Route 'CoArbitrary' through the SOP generic representation.
+Use @deriving ('CoArbitrary') via 'Generically' MyType@ for any 'GHC.Generics.Generic' type.
 -}
-instance (Generic a, CoArbitrary (Rep a ())) => CoArbitrary (Generically a) where
-  coArbitrary = fmap (. (\(Generically a) -> (from a :: Rep a ()))) coArbitrary
+instance (SOP.GFrom a, Generic a, CoArbitrary (SOP.SOP SOP.I (SOP.GCode a))) => CoArbitrary (Generically a) where
+  coArbitrary = fmap (\f (Generically a) -> f (SOP.gfrom a)) coArbitrary
 
-instance CoArbitrary (U1 x) where
-  coArbitrary = (\b U1 -> b) <$> arbitrary
+-- ** generics-sop NP/NS/SOP/I instances
 
--- | 'V1' is uninhabited; a function from it is trivially total.
-instance CoArbitrary (V1 x) where
-  coArbitrary = pure (\case {})
+-- | The identity functor: delegate to the wrapped type.
+instance (CoArbitrary a) => CoArbitrary (SOP.I a) where
+  coArbitrary = (. SOP.unI) <$> coArbitrary
 
-instance (CoArbitrary (f x)) => CoArbitrary (M1 i c f x) where
-  coArbitrary = (. unM1) <$> coArbitrary
+{- | A function from a product is isomorphic to a curried chain of functions,
+one per field.
+Uses 'SOP.sList' to dispatch on whether the list is empty or non-empty in a single instance.
+-}
+instance (SOP.All (SOP.Compose CoArbitrary f) xs) => CoArbitrary (SOP.NP f xs) where
+  coArbitrary = case SOP.sList @xs of
+    SOP.SNil -> (\b SOP.Nil -> b) <$> arbitrary
+    SOP.SCons -> do
+      f <- coArbitrary
+      pure $ \(x SOP.:* xs) -> f x xs
 
-instance (CoArbitrary (fL x), CoArbitrary (fR x)) => CoArbitrary ((fL :+: fR) x) where
+{- | Generate a case-split function over an n-ary sum.
+For each constructor, 'coArbitrary' produces a function from that constructor's payload;
+the final function dispatches on which constructor is present.
+-}
+instance (SOP.All (SOP.Compose CoArbitrary f) xs) => CoArbitrary (SOP.NS f xs) where
   coArbitrary = do
-    fL <- coArbitrary
-    fR <- coArbitrary
-    pure $ \case
-      L1 l -> fL l
-      R1 r -> fR r
+    np <-
+      SOP.hsequence' $
+        SOP.hcpure
+          (Proxy @(SOP.Compose CoArbitrary f))
+          (SOP.Comp $ fmap (SOP.Fn . (SOP.K .)) coArbitrary)
+    pure $ SOP.hcollapse . SOP.hap np
 
--- | A function from a product @(fL :*: fR)@ is isomorphic to a curried function @fL -> fR -> b@.
-instance (CoArbitrary (fL x), CoArbitrary (fR x)) => CoArbitrary ((fL :*: fR) x) where
-  coArbitrary = do
-    f <- coArbitrary -- TestCases (fL x -> fR x -> b)
-    pure $ \(l :*: r) -> f l r
-
-instance (CoArbitrary a) => CoArbitrary (K1 i a x) where
-  coArbitrary = (. unK1) <$> coArbitrary
+-- | A sum-of-products: delegate to the underlying 'SOP.NS'.
+instance (CoArbitrary (SOP.NS (SOP.NP f) xss)) => CoArbitrary (SOP.SOP f xss) where
+  coArbitrary = (. SOP.unSOP) <$> coArbitrary
 
 -- * Instances for base datatypes
 

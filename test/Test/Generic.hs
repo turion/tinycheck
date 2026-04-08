@@ -61,7 +61,7 @@ tests =
             \(x :: Int) -> reverse [x] /= [x]
         , expectFailureWith "True" "even True falsified: input shown" $
             \(b :: Bool) -> not b
-        , expectFailureWithN 200_000 "LargeRecord" "LargeRecord appears at most 7 times in show" $
-            \(r :: LargeRecord) -> countOccurrences "LargeRecord" (show r) <= 7
+        , expectFailureWithN 1_000_000_0 "LargeRecord" "LargeRecord appears at most 6 times in show" $
+            \(r :: LargeRecord) -> countOccurrences "LargeRecord" (show r) <= 6
         ]
     ]

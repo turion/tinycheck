@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {- | A lightweight enumeration-based property testing library.
@@ -589,24 +590,14 @@ instance (RealFrac a, Arbitrary a) => CoArbitrary (RealFracCoArbitrary a) where
     posOne <- arbitrary -- x == 1
     posLarge <- arbitrary -- x > 1
     pure $ \(RealFracCoArbitrary x) ->
-      if x < -1
-        then negSmall
-        else
-          if x == -1
-            then negOne
-            else
-              if x < 0
-                then negFrac
-                else
-                  if x == 0
-                    then zero
-                    else
-                      if x < 1
-                        then posFrac
-                        else
-                          if x == 1
-                            then posOne
-                            else posLarge
+      if
+        | x < -1 -> negSmall
+        | x == -1 -> negOne
+        | x < 0 -> negFrac
+        | x == 0 -> zero
+        | x < 1 -> posFrac
+        | x == 1 -> posOne
+        | otherwise -> posLarge
 
 {- | An instance @'CoArbitrary' a@ provides a 'TestCases' of functions @a -> b@ for any @'Arbitrary' b@,
 by case-splitting on the structure of @a@.
@@ -623,14 +614,19 @@ instance CoArbitrary Bool where
   coArbitrary = do
     t <- arbitrary
     f <- arbitrary
-    pure $ \case True -> t; False -> f
+    pure $ \case
+      True -> t
+      False -> f
 
 instance CoArbitrary Ordering where
   coArbitrary = do
     lt <- arbitrary
     eq <- arbitrary
     gt <- arbitrary
-    pure $ \case LT -> lt; EQ -> eq; GT -> gt
+    pure $ \case
+      LT -> lt
+      EQ -> eq
+      GT -> gt
 
 -- Integral types: split on sign × parity via 'IntegralCoArbitrary',
 -- also combined with 'OrdCoArbitrary' for pivot-based splitting.
@@ -705,7 +701,9 @@ instance (CoArbitrary (fL x), CoArbitrary (fR x)) => CoArbitrary ((fL :+: fR) x)
   coArbitrary = do
     fL <- coArbitrary
     fR <- coArbitrary
-    pure $ \case L1 l -> fL l; R1 r -> fR r
+    pure $ \case
+      L1 l -> fL l
+      R1 r -> fR r
 
 -- | A function from a product @(fL :*: fR)@ is isomorphic to a curried function @fL -> fR -> b@.
 instance (CoArbitrary (fL x), CoArbitrary (fR x)) => CoArbitrary ((fL :*: fR) x) where

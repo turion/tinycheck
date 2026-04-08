@@ -45,7 +45,7 @@
               overrides = dependenciesOverrides;
             }))
             (genAttrs supportedGhcs (ghc: pkgs.haskell.packages.${ghc})
-            // { default = pkgs.haskellPackages; });
+            // { default = pkgs.haskell.packages.ghc912; });
 
           # Haskell package overrides to set the definitions of the locally defined packages to the current version in this repo
           localPackagesOverrides = hfinal: hprev: with pkgs.haskell.lib;

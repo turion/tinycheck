@@ -135,9 +135,19 @@ jobs:
       - run: nix develop .#${{ matrix.version }} --accept-flake-config -c cabal update -fdev
       - run: nix develop .#${{ matrix.version }} --accept-flake-config -c cabal test all -fdev
 
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - run: nix develop . --accept-flake-config -c cabal update -fdev
+      - run: nix develop . --accept-flake-config -c cabal bench --enable-benchmarks
+
   success:
     name: Successfully build and test on all systems
     needs:
+      - benchmark
       - build-cabal
       - build-flake
       - lint

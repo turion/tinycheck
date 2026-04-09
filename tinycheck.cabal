@@ -35,10 +35,14 @@ common opts
   if flag(dev)
     ghc-options: -Werror
   default-extensions:
+    DataKinds
     DefaultSignatures
     DerivingStrategies
     DerivingVia
+    LambdaCase
     ScopedTypeVariables
+    TypeApplications
+    TypeFamilies
 
   default-language: GHC2021
   build-depends: base >=4.17 && <4.22

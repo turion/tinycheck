@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
-
 {- | Tasty integration for tinycheck.
 
 Usage:
@@ -126,8 +124,8 @@ instance IsTest TinyCheckTest where
         Property cases = toProperty prop
         results = take n (getTestCases cases)
     case sequence_ results of
-      Right () -> return $ testPassed $ "OK, checked " <> show (length results) <> " cases"
-      Left msg -> return $ testFailed msg
+      Right () -> pure $ testPassed $ "OK, checked " <> show (length results) <> " cases"
+      Left msg -> pure $ testFailed msg
 
 -- * Public API
 
@@ -163,7 +161,7 @@ instance IsTest ExpectFailure where
 
   run opts (ExpectFailure needle inner) progress = do
     result <- run opts inner progress
-    return $ case resultOutcome result of
+    pure $ case resultOutcome result of
       Failure _ ->
         let msg = resultDescription result
          in if needle `isInfixOf` msg

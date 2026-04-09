@@ -90,6 +90,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: tinycheck
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - name: Generate versions
         id: generate-versions
         run: |
@@ -102,6 +106,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: tinycheck
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - run: nix flake check
       - name: Check whether .nix files are formatted
         run: |
@@ -131,6 +139,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: tinycheck
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - run: nix build .#legacyPackages.x86_64-linux.${{ matrix.version }}.tinycheck-all --accept-flake-config
       - run: nix develop .#${{ matrix.version }} --accept-flake-config -c cabal update -fdev
       - run: nix develop .#${{ matrix.version }} --accept-flake-config -c cabal test all -fdev
@@ -141,6 +153,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: tinycheck
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - run: nix develop . --accept-flake-config -c cabal update -fdev
       - run: nix develop . --accept-flake-config -c cabal bench --enable-benchmarks
 

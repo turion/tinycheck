@@ -1,6 +1,16 @@
 {
   description = "tinycheck";
 
+  nixConfig = {
+    extra-substituters = [
+      "https://tinycheck.cachix.org"
+    ];
+    extra-trusted-public-keys = [
+      "tinycheck.cachix.org-1:5uheQrx8fadcciPTGYzhL0Ud821uLSSKkNVeeCM4GbA="
+    ];
+  };
+
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";

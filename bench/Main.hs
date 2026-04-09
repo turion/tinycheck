@@ -37,7 +37,7 @@ data Tree a = Leaf | Node (Tree a) a (Tree a)
 
 -- | Counts used for generators.
 counts :: [Int]
-counts = [10_000, 100_000, 1_000_000]
+counts = [100, 1000, 10_000]
 
 {- | Benchmark a single generator at a given list of counts.
 The group name is the type/description; each leaf is labelled by the count.
@@ -48,128 +48,7 @@ benchGenWith :: forall a. (Arbitrary a, NFData a) => [Int] -> String -> Benchmar
 benchGenWith ns name =
   bgroup name $
     ns <&> \n ->
-      localOption (mkTimeout 5_000_000) $ -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-        -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run -- 5 second timeout per benchmark run
-      -- 5 second timeout per benchmark run
+      localOption (mkTimeout 5_000_000) $
         bench (show n) $
           nf (\n' -> take n' $ getTestCases $ arbitrary @a) n
 
@@ -185,7 +64,6 @@ main =
     [ bgroup
         "primitives"
         [ benchGen @Int "Int"
-        , benchGen @Bool "Bool"
         , benchGen @Char "Char"
         , benchGen @Integer "Integer"
         ]
@@ -194,7 +72,6 @@ main =
         [ benchGen @(Int, Int) "(Int, Int)"
         , benchGen @(Maybe Int) "Maybe Int"
         , benchGen @(Either Int Bool) "Either Int Bool"
-        , benchGen @(Bool, Bool, Bool) "(Bool, Bool, Bool)"
         ]
     , bgroup
         "lists"

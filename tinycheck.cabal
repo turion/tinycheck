@@ -35,10 +35,14 @@ common opts
   if flag(dev)
     ghc-options: -Werror
   default-extensions:
+    DataKinds
     DefaultSignatures
     DerivingStrategies
     DerivingVia
+    LambdaCase
     ScopedTypeVariables
+    TypeApplications
+    TypeFamilies
 
   default-language: GHC2021
   build-depends: base >=4.17 && <4.22
@@ -54,6 +58,7 @@ library
     Test.Tasty.TinyCheck
 
   build-depends:
+    generics-sop >=0.5 && <0.6,
     tagged >=0.8 && <0.9,
     tasty >=1.5 && <1.6,
 
@@ -64,6 +69,13 @@ test-suite tinycheck-test
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
+  other-modules:
+    Test.Base
+    Test.Combinators
+    Test.Generic
+    Test.HybridSort
+    Test.Strings
+
   build-depends: tinycheck
 
 test-suite example-colour

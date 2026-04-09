@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {- | A lightweight enumeration-based property testing library.
@@ -33,11 +33,22 @@ module Data.TestCases (
 
   -- ** Char generators
   allChars,
-  asciiChars,
+  commonASCIIChars,
   printableChars,
   letterChars,
   digitChars,
   inCategories,
+
+  -- ** Newtype wrappers for common char/string generators
+  Printable (..),
+  Letter (..),
+  Digit (..),
+  Upper (..),
+  Lower (..),
+  AsciiWord (..),
+  LetterWord (..),
+  DigitWord (..),
+  AsciiLine (..),
 
   -- * CoArbitrary
   CoArbitrary (..),
@@ -67,6 +78,7 @@ import Data.Monoid (All (..), Alt (..), Any (..), Ap (..), Dual (..), Endo (..),
 import Data.Monoid qualified as Monoid (Product (..), Sum (..))
 import Data.Ord (Down (..))
 import Data.Proxy (Proxy (..))
+import Data.Ratio (Ratio, (%))
 import Data.Semigroup qualified as Semigroup (Arg (..), First (..), Last (..), Max (..), Min (..), WrappedMonoid (..))
 import Data.Version (Version (..))
 import Data.Void (Void)
@@ -74,6 +86,10 @@ import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Generics
 import Numeric.Natural (Natural)
 import System.Exit (ExitCode (..))
+
+-- generics-sop
+import Generics.SOP qualified as SOP
+import Generics.SOP.GGP qualified as SOP (GCode, GFrom, GTo, gfrom, gto)
 
 -- * TestCases
 
@@ -104,6 +120,9 @@ With two infinite sides, both are explored fairly:
 
 > (Left <$> TestCases [1..]) <> (Right <$> TestCases [1..])
 >   == TestCases [Left 1, Right 1, Left 2, Right 2, Left 3, Right 3, ...]
+
+In practice, this means that all different /shapes/ of data can be explored early,
+before all values of one shape are exhausted.
 
 === Applicative and Monad
 
@@ -140,14 +159,13 @@ For example:
 >   == TestCases [1] <> TestCases [2,3]
 >   == TestCases [1,2,3]
 
-Consequently the 'Applicative' and 'Monad' laws (which depend on associativity of bind) also
-fail.
+Consequently the 'Applicative' and 'Monad' laws (which depend on associativity of bind) also fail.
 
 In practice this does not matter much: a property test only cares whether /all/
-generated cases pass, not about the order in which they are visited.  Any
-permutation of the input list yields the same test outcome.  The interleaving
-strategy is chosen purely to ensure that no generator is starved, not to
-produce any canonical ordering.
+generated cases pass, not about the order in which they are visited.
+Any permutation of the input list yields the same test outcome.  The interleaving
+strategy is chosen purely to ensure that each case is visited early and no generator is starved,
+not to produce any canonical ordering.
 
 You can use this fact to your advantage:
 if you want to visit some cases earlier,
@@ -163,8 +181,9 @@ testCase = TestCases . pure
 
 {- | Fairly interleave any number of 'TestCases'.
 
-Each round takes one element from each non-empty source in order, then
-repeats with the remaining tails.  Empty sources are skipped.
+Each round emits one element from each non-empty source in order, then repeats with the remaining tails.
+Empty sources are skipped.
+Elements are emitted one at a time, so the output is productive even when sources are built recursively.
 This generalises '<>' from two sources to @n@ sources:
 
 > interleaveN [TestCases [1,2,3], TestCases [10,20,30], TestCases [100,200,300]]
@@ -178,14 +197,16 @@ Works correctly when sources have different lengths or are infinite:
 @'interleaveN' [a, b] == a '<>' b@.
 -}
 interleaveN :: [TestCases a] -> TestCases a
-interleaveN = TestCases . go . map getTestCases
+interleaveN = TestCases . go . fmap getTestCases
   where
     go [] = []
-    go xss =
-      let (heads, tails') = foldr collect ([], []) xss
-       in heads ++ go tails'
-    collect [] (hs, ts) = (hs, ts)
-    collect (x : xs) (hs, ts) = (x : hs, xs : ts)
+    go xss = step xss []
+    -- Emit one head from each non-empty source, accumulating the non-empty tails,
+    -- then recurse.  Emitting is done one element at a time so that the output
+    -- is productive even when the source list is built recursively.
+    step [] acc = go (reverse acc)
+    step ([] : xss) acc = step xss acc
+    step ((x : xs) : xss) acc = x : step xss (xs : acc)
 
 {- | Interleave two 'TestCases' so that neither side starves the other.
 This is the key operation: it lets us combine two (potentially infinite) generators and still visit cases from both.
@@ -219,10 +240,16 @@ As a result infinite generators compose without starvation.
 instance Monad TestCases where
   as >>= f = foldMap f as
 
+-- | Generate lists of at least @n@ elements.
+atLeast :: (Arbitrary a) => Int -> TestCases [a]
+atLeast n = (<>) <$> replicateM n arbitrary <*> arbitrary
+
 -- * Running tests (plain IO)
 
 {- | Run a named test over (up to) 10 million generated cases.
+
 Throws an error on the first failure, printing the failing input and a debug string.
+For proper integration into a testing framework, see "Test.Tasty.TinyCheck".
 -}
 testWithMsg :: (Show a, Arbitrary a) => String -> (a -> (Bool, String)) -> IO ()
 testWithMsg msg f = do
@@ -244,7 +271,26 @@ test msg f = testWithMsg msg (\a -> (f a, ""))
 
 -- * Arbitrary
 
--- | Class of types that have a canonical enumeration of test cases.
+{- | Class of types that have a canonical enumeration of test cases.
+
+For any type with a 'GHC.Generics.Generic' instance, you can derive 'Arbitrary' for free via 'Generically':
+
+@
+data Colour = Red | Green | Blue deriving ('GHC.Generics.Generic')
+
+deriving via 'Generically' Colour instance 'Arbitrary' Colour
+-- generates: TestCases [Red, Green, Blue]
+@
+
+For types with fields, the fields\' generators are interleaved fairly:
+
+@
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving ('GHC.Generics.Generic')
+
+deriving via 'Generically' (Tree a) instance ('Arbitrary' a) => 'Arbitrary' (Tree a)
+-- generates: Leaf, Node Leaf 0 Leaf, Node (Node Leaf 0 Leaf) 0 Leaf, Node Leaf (-1) Leaf, ...
+@
+-}
 class Arbitrary a where
   arbitrary :: TestCases a
 
@@ -265,18 +311,14 @@ newtype BoundedArbitrary a = BoundedArbitrary a
 instance (Bounded a, Enum a) => Arbitrary (BoundedArbitrary a) where
   arbitrary = coerce (TestCases [minBound ..] :: TestCases a)
 
-{- | Derive 'Arbitrary' for any @'Fractional'@ @'Enum'@ type by starting at common boundary values
-and then interleaving @1\/n@ fractions with their negatives.
-Stays near zero where bugs tend to hide.
+{- | Derive 'Arbitrary' for any 'Fractional' type by delegating to 'Arbitrary' @('Ratio' 'Integer')@
+and converting each rational via 'fromRational'.
+This enumerates all rationals via a Cantor diagonal, so every rational value reachable by the type is eventually tested.
 -}
 newtype RealFracArbitrary a = RealFracArbitrary a
 
-instance (Fractional a, Enum a) => Arbitrary (RealFracArbitrary a) where
-  arbitrary =
-    coerce $
-      TestCases [0, 1, -1, 0.5, -0.5, 2, -2 :: a]
-        <> TestCases [1 / n | n <- [2 ..]]
-        <> (negate <$> TestCases [1 / n | n <- [2 ..]])
+instance (Fractional a) => Arbitrary (RealFracArbitrary a) where
+  arbitrary = RealFracArbitrary . fromRational <$> arbitrary
 
 -- Numeric instances
 -- Signed integer types: interleave non-negatives and negatives.
@@ -307,10 +349,22 @@ deriving via BoundedArbitrary Word64 instance Arbitrary Word64
 instance Arbitrary Natural where
   arbitrary = TestCases [0 ..]
 
--- Floating-point types: start at boundary values, then @1\/n@ fractions.
+-- Floating-point types and rationals: use the 'RealFracArbitrary' wrapper.
 deriving via RealFracArbitrary Float instance Arbitrary Float
 
 deriving via RealFracArbitrary Double instance Arbitrary Double
+
+{- | Enumerate all ratios via a Cantor diagonal over @(p, q)@ pairs with @q > 0@,
+interleaved with their negatives and zero.
+Every ratio @p '%' q@ with @p, q@ reachable by 'Arbitrary' @a@ appears in finite time.
+-}
+instance (Integral a, Arbitrary a) => Arbitrary (Ratio a) where
+  arbitrary =
+    testCase 0 <> do
+      n <- TestCases [1 ..]
+      q <- fromInteger <$> TestCases [1 .. n]
+      let p = fromInteger n - q + 1
+      testCase (p % q) <> testCase (negate (p % q))
 
 -- Char and String
 
@@ -318,7 +372,7 @@ deriving via RealFracArbitrary Double instance Arbitrary Double
 This is the most general 'Char' generator and is used for the 'Arbitrary' instance.
 -}
 allChars :: TestCases Char
-allChars = TestCases $ map chr ([0 .. 0xD7FF] ++ [0xE000 .. 0x10FFFF])
+allChars = TestCases $ fmap chr ([0 .. 0xD7FF] <> [0xE000 .. 0x10FFFF])
 
 -- | Filter a 'Char' generator to only those characters whose Unicode 'GeneralCategory' is in the supplied list.
 inCategories :: [GeneralCategory] -> TestCases Char -> TestCases Char
@@ -327,8 +381,8 @@ inCategories cats (TestCases cs) = TestCases $ filter ((`elem` cats) . generalCa
 {- | ASCII letters and digits plus common punctuation and whitespace.
 Useful for testing with printable ASCII.
 -}
-asciiChars :: TestCases Char
-asciiChars = TestCases $ ['a' .. 'z'] <> ['A' .. 'Z'] <> ['0' .. '9'] <> " !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+commonASCIIChars :: TestCases Char
+commonASCIIChars = TestCases $ ['a' .. 'z'] <> ['A' .. 'Z'] <> ['0' .. '9'] <> " !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
 {- | All printable Unicode characters (letters, marks, numbers, punctuation,
 symbols, and space separators).
@@ -373,6 +427,63 @@ letterChars =
 digitChars :: TestCases Char
 digitChars = inCategories [DecimalNumber] allChars
 
+-- ** Newtype wrappers for common char\/string generators
+
+{- | A printable Unicode character.
+Useful when a test only cares that a character is printable.
+-}
+newtype Printable = Printable Char deriving stock (Show)
+
+instance Arbitrary Printable where arbitrary = Printable <$> printableChars
+
+-- | A Unicode letter ('UppercaseLetter', 'LowercaseLetter', etc.).
+newtype Letter = Letter Char deriving stock (Show)
+
+instance Arbitrary Letter where arbitrary = Letter <$> letterChars
+
+-- | A Unicode decimal digit.
+newtype Digit = Digit Char deriving stock (Show)
+
+instance Arbitrary Digit where arbitrary = Digit <$> digitChars
+
+-- | An uppercase Unicode letter.
+newtype Upper = Upper Char deriving stock (Show)
+
+instance Arbitrary Upper where arbitrary = Upper <$> inCategories [UppercaseLetter] allChars
+
+-- | A lowercase Unicode letter.
+newtype Lower = Lower Char deriving stock (Show)
+
+instance Arbitrary Lower where arbitrary = Lower <$> inCategories [LowercaseLetter] allChars
+
+{- | A string of words drawn from 'commonASCIIChars'.
+Words are separated by spaces; no leading or trailing space is guaranteed.
+-}
+newtype AsciiWord = AsciiWord String deriving stock (Show)
+
+instance Arbitrary AsciiWord where arbitrary = AsciiWord <$> wordsOf commonASCIIChars
+
+{- | A string of words made up of Unicode letters.
+Words are separated by spaces.
+-}
+newtype LetterWord = LetterWord String deriving stock (Show)
+
+instance Arbitrary LetterWord where arbitrary = LetterWord <$> wordsOf letterChars
+
+{- | A string of words made up of Unicode decimal digits.
+Words are separated by spaces.
+-}
+newtype DigitWord = DigitWord String deriving stock (Show)
+
+instance Arbitrary DigitWord where arbitrary = DigitWord <$> wordsOf digitChars
+
+{- | A multi-line string drawn from 'commonASCIIChars'.
+Useful for testing parsers and text-processing functions.
+-}
+newtype AsciiLine = AsciiLine String deriving stock (Show)
+
+instance Arbitrary AsciiLine where arbitrary = AsciiLine <$> linesOf commonASCIIChars
+
 instance Arbitrary Char where
   arbitrary = allChars
 
@@ -394,10 +505,6 @@ linesOf chars = wordsOf chars <> foldMap (\k -> unlines . fmap unwords <$> repli
 -- | A 'String' generator using 'allChars': single strings, multi-word, and multi-line strings.
 string :: TestCases String
 string = linesOf allChars
-
--- | Generate strings of at least @n@ characters.
-atLeast :: Int -> TestCases String
-atLeast n = (<>) <$> replicateM n arbitrary <*> arbitrary
 
 -- Other base types
 instance Arbitrary () where arbitrary = pure ()
@@ -426,31 +533,42 @@ deriving via Generically (a, b, c, d, e) instance (Arbitrary a, Arbitrary b, Arb
 instance (CoArbitrary a, Arbitrary b) => Arbitrary (a -> b) where
   arbitrary = coArbitrary
 
-{- | Route 'Arbitrary' through the generic representation.
+{- | Route 'Arbitrary' through the SOP generic representation.
 Use @deriving ('Arbitrary') via 'Generically' MyType@ to get a free instance
-for any 'Generic' type.
+for any 'GHC.Generics.Generic' type.
 -}
-instance (Generic a, Arbitrary (Rep a ())) => Arbitrary (Generically a) where
-  arbitrary = fmap (Generically . to) (arbitrary :: TestCases (Rep a ()))
+instance (SOP.GTo a, Generic a, Arbitrary (SOP.SOP SOP.I (SOP.GCode a))) => Arbitrary (Generically a) where
+  arbitrary = fmap (Generically . SOP.gto) arbitrary
 
-instance (Arbitrary (fL x), Arbitrary (fR x)) => Arbitrary ((fL :+: fR) x) where
-  arbitrary = (L1 <$> arbitrary) <> (R1 <$> arbitrary)
+-- ** generics-sop NP/NS/SOP/I instances
 
-instance (Arbitrary (fL x), Arbitrary (fR x)) => Arbitrary ((fL :*: fR) x) where
-  arbitrary = (:*:) <$> arbitrary <*> arbitrary
+-- | The identity functor: delegate to the wrapped type.
+instance (Arbitrary a) => Arbitrary (SOP.I a) where
+  arbitrary = SOP.I <$> arbitrary
 
-instance (Arbitrary (f x)) => Arbitrary (M1 i t f x) where
-  arbitrary = M1 <$> arbitrary
+{- | Generate all fields independently and combine them into a product.
+Sequences one 'arbitrary' call per position,
+using 'SOP.hcpure' with the 'Compose' constraint and then 'SOP.hsequence''.
+-}
+instance (SOP.All (SOP.Compose Arbitrary f) xs) => Arbitrary (SOP.NP f xs) where
+  arbitrary = SOP.hsequence' $ SOP.hcpure (Proxy @(SOP.Compose Arbitrary f)) (SOP.Comp arbitrary)
 
-instance (Arbitrary a) => Arbitrary (K1 i a x) where
-  arbitrary = K1 <$> arbitrary
+{- | Generate one constructor choice by interleaving all injections.
+Each constructor is given equal weight via 'interleaveN'.
+-}
+instance (SOP.All (SOP.Compose Arbitrary f) xs) => Arbitrary (SOP.NS f xs) where
+  arbitrary =
+    interleaveN
+      . fmap SOP.hsequence'
+      . SOP.apInjs_NP
+      $ SOP.hcpure (Proxy @(SOP.Compose Arbitrary f)) (SOP.Comp arbitrary)
 
-instance Arbitrary (U1 x) where
-  arbitrary = pure U1
-
--- | 'V1' is the empty type (no constructors), so it has no test cases.
-instance Arbitrary (V1 x) where
-  arbitrary = TestCases []
+{- | A sum-of-products: delegate to the underlying 'SOP.NS'.
+The 'Arbitrary (SOP.NS (SOP.NP f) xss)' constraint is discharged
+by the 'Arbitrary (SOP.NS f xs)' instance above.
+-}
+instance (Arbitrary (SOP.NS (SOP.NP f) xss)) => Arbitrary (SOP.SOP f xss) where
+  arbitrary = SOP.SOP <$> arbitrary
 
 {- | Derive 'CoArbitrary' for any @'Ord' a@ by doing a three-way split on @'compare' argument pivot@ for each generated pivot.
 This means the generated function can return different outputs for values below, equal to, or above the pivot.
@@ -512,48 +630,20 @@ instance (RealFrac a, Arbitrary a) => CoArbitrary (RealFracCoArbitrary a) where
     posOne <- arbitrary -- x == 1
     posLarge <- arbitrary -- x > 1
     pure $ \(RealFracCoArbitrary x) ->
-      if x < -1
-        then negSmall
-        else
-          if x == -1
-            then negOne
-            else
-              if x < 0
-                then negFrac
-                else
-                  if x == 0
-                    then zero
-                    else
-                      if x < 1
-                        then posFrac
-                        else
-                          if x == 1
-                            then posOne
-                            else posLarge
+      if
+        | x < -1 -> negSmall
+        | x == -1 -> negOne
+        | x < 0 -> negFrac
+        | x == 0 -> zero
+        | x < 1 -> posFrac
+        | x == 1 -> posOne
+        | otherwise -> posLarge
 
 {- | An instance @'CoArbitrary' a@ provides a 'TestCases' of functions @a -> b@ for any @'Arbitrary' b@,
 by case-splitting on the structure of @a@.
 -}
 class CoArbitrary a where
   coArbitrary :: (Arbitrary b) => TestCases (a -> b)
-
--- Base CoArbitrary instances; all use the newtype wrappers above rather than
--- 'const', so that generated functions actually vary on their argument.
-instance CoArbitrary () where
-  coArbitrary = (\b () -> b) <$> arbitrary
-
-instance CoArbitrary Bool where
-  coArbitrary = do
-    t <- arbitrary
-    f <- arbitrary
-    pure $ \case True -> t; False -> f
-
-instance CoArbitrary Ordering where
-  coArbitrary = do
-    lt <- arbitrary
-    eq <- arbitrary
-    gt <- arbitrary
-    pure $ \case LT -> lt; EQ -> eq; GT -> gt
 
 -- Integral types: split on sign × parity via 'IntegralCoArbitrary',
 -- also combined with 'OrdCoArbitrary' for pivot-based splitting.
@@ -582,10 +672,14 @@ deriving via IntegralCoArbitrary Word64 instance CoArbitrary Word64
 -- Natural has no negatives so OrdCoArbitrary is the right fit.
 deriving via OrdCoArbitrary Natural instance CoArbitrary Natural
 
--- Floating types: split on sign × magnitude via 'RealFracCoArbitrary'.
+-- Floating types and rationals: split on sign × magnitude via 'RealFracCoArbitrary'.
 deriving via RealFracCoArbitrary Float instance CoArbitrary Float
 
 deriving via RealFracCoArbitrary Double instance CoArbitrary Double
+
+deriving via RealFracCoArbitrary (Ratio Integer) instance CoArbitrary (Ratio Integer)
+
+deriving via RealFracCoArbitrary (Ratio Int) instance CoArbitrary (Ratio Int)
 
 -- Char: an enum, so use 'EnumCoArbitrary'.
 deriving via EnumCoArbitrary Char instance CoArbitrary Char
@@ -604,42 +698,57 @@ deriving via Generically (a, b, c) instance (CoArbitrary a, CoArbitrary b, CoArb
 
 deriving via Generically (a, b, c, d) instance (CoArbitrary a, CoArbitrary b, CoArbitrary c, CoArbitrary d) => CoArbitrary (a, b, c, d)
 
-{- | Route 'CoArbitrary' through the generic representation.
-Use @deriving ('CoArbitrary') via 'Generically' MyType@ for any 'Generic' type.
+{- | Route 'CoArbitrary' through the SOP generic representation.
+Use @deriving ('CoArbitrary') via 'Generically' MyType@ for any 'GHC.Generics.Generic' type.
 -}
-instance (Generic a, CoArbitrary (Rep a ())) => CoArbitrary (Generically a) where
-  coArbitrary = fmap (. (\(Generically a) -> (from a :: Rep a ()))) coArbitrary
+instance (SOP.GFrom a, Generic a, CoArbitrary (SOP.SOP SOP.I (SOP.GCode a))) => CoArbitrary (Generically a) where
+  coArbitrary = fmap (\f (Generically a) -> f (SOP.gfrom a)) coArbitrary
 
-instance CoArbitrary (U1 x) where
-  coArbitrary = (\b U1 -> b) <$> arbitrary
+-- ** generics-sop NP/NS/SOP/I instances
 
--- | 'V1' is uninhabited; a function from it is trivially total.
-instance CoArbitrary (V1 x) where
-  coArbitrary = pure (\case {})
+-- | The identity functor: delegate to the wrapped type.
+instance (CoArbitrary a) => CoArbitrary (SOP.I a) where
+  coArbitrary = (. SOP.unI) <$> coArbitrary
 
-instance (CoArbitrary (f x)) => CoArbitrary (M1 i c f x) where
-  coArbitrary = (. unM1) <$> coArbitrary
+{- | A function from a product is isomorphic to a curried chain of functions,
+one per field.
+Uses 'SOP.sList' to dispatch on whether the list is empty or non-empty in a single instance.
+-}
+instance (SOP.All (SOP.Compose CoArbitrary f) xs) => CoArbitrary (SOP.NP f xs) where
+  coArbitrary = case SOP.sList @xs of
+    SOP.SNil -> (\b SOP.Nil -> b) <$> arbitrary
+    SOP.SCons -> do
+      f <- coArbitrary
+      pure $ \(x SOP.:* xs) -> f x xs
 
-instance (CoArbitrary (fL x), CoArbitrary (fR x)) => CoArbitrary ((fL :+: fR) x) where
+{- | Generate a case-split function over an n-ary sum.
+For each constructor, 'coArbitrary' produces a function from that constructor's payload;
+the final function dispatches on which constructor is present.
+-}
+instance (SOP.All (SOP.Compose CoArbitrary f) xs) => CoArbitrary (SOP.NS f xs) where
   coArbitrary = do
-    fL <- coArbitrary
-    fR <- coArbitrary
-    pure $ \case L1 l -> fL l; R1 r -> fR r
+    np <-
+      SOP.hsequence' $
+        SOP.hcpure
+          (Proxy @(SOP.Compose CoArbitrary f))
+          (SOP.Comp $ fmap (SOP.Fn . (SOP.K .)) coArbitrary)
+    pure $ SOP.hcollapse . SOP.hap np
 
--- | A function from a product @(fL :*: fR)@ is isomorphic to a curried function @fL -> fR -> b@.
-instance (CoArbitrary (fL x), CoArbitrary (fR x)) => CoArbitrary ((fL :*: fR) x) where
-  coArbitrary = do
-    f <- coArbitrary -- TestCases (fL x -> fR x -> b)
-    pure $ \(l :*: r) -> f l r
-
-instance (CoArbitrary a) => CoArbitrary (K1 i a x) where
-  coArbitrary = (. unK1) <$> coArbitrary
+-- | A sum-of-products: delegate to the underlying 'SOP.NS'.
+instance (CoArbitrary (SOP.NS (SOP.NP f) xss)) => CoArbitrary (SOP.SOP f xss) where
+  coArbitrary = (. SOP.unSOP) <$> coArbitrary
 
 -- * Instances for base datatypes
 
 --
 -- Instances for 'Generic' types are derived via 'Generically'.
 -- Instances for types without 'Generic' are written manually.
+
+deriving via Generically () instance CoArbitrary ()
+
+deriving via Generically Bool instance CoArbitrary Bool
+
+deriving via Generically Ordering instance CoArbitrary Ordering
 
 -- ** Data.Void
 

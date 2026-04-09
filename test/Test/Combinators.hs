@@ -74,6 +74,42 @@ tests =
               /= ((,) <$> "abc" <*> [1, 2, 3, 4, 5, 6])
         ]
     , testGroup
+        "do-notation / assert / forAll"
+        [ testProperty "assert True passes" $
+            assert True
+        , testProperty "forAll: all elements of a generator satisfy a predicate" $
+            forAll (TestCases [1 .. 10 :: Int])
+              >>= \n -> assert (n > 0)
+        , testProperty "do-block: two generators, Bool result" $ do
+            x <- forAll $ TestCases [1 .. 5 :: Int]
+            y <- forAll $ TestCases [1 .. 5 :: Int]
+            assert $ x + y > 0
+        , testProperty "do-block: two generators, Bool property" $ do
+            x <- forAll $ TestCases [1 .. 5 :: Int]
+            y <- forAll $ TestCases [1 .. 5 :: Int]
+            assert $ x * y == y * x
+        , testProperty "do-block: two arbitrary lists" $ do
+            xs <- forAll (arbitrary :: TestCases [Int])
+            ys <- forAll (arbitrary :: TestCases [Int])
+            assert $ length (xs <> ys) == length xs + length ys
+        , testProperty "do-block: sort is idempotent" $ do
+            xs <- forAll (arbitrary :: TestCases [Int])
+            assert $ sort (sort xs) == sort xs
+        , expectFailureWithN 1 "first 3:" "forAllWith: logs rendered value on failure" $ do
+            xs <- forAllWith (\xs -> "first 3: " <> show (take 3 xs)) (TestCases [[-1, -2, -3]] :: TestCases [Int])
+            assert $ all (> 0) xs
+        , expectFailureWithN 1 "xs:" "forAllShow: logs tag: value on failure" $ do
+            xs <- forAllShow "xs" (TestCases [[-1]] :: TestCases [Int])
+            assert $ all (> 0) xs
+        , expectFailureWithN 1 "debug info" "debug: log line appears in failure message" $ do
+            debug "debug info"
+            assert False
+        , testProperty "assertEqual: passes for equal values" $
+            assertEqual (42 :: Int) 42
+        , expectFailureWithN 1 "Expected: 1" "assertEqual: shows expected and actual on failure" $
+            assertEqual (1 :: Int) 2
+        ]
+    , testGroup
         "CoArbitrary newtype wrappers (nontrivial functions)"
         [ testProperty "IntegralCoArbitrary: some f distinguishes 0 from 1" $
             -- A constant function satisfies f 0 == f 1 for all inputs, but the

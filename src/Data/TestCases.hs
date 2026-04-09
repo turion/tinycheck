@@ -62,7 +62,7 @@ module Data.TestCases (
 where
 
 -- base
-import Control.Monad (ap, forM_, replicateM, unless)
+import Control.Monad (forM_, replicateM, unless)
 import Data.Char (GeneralCategory (..), chr, generalCategory)
 import Data.Coerce (coerce)
 import Data.Complex (Complex (..))
@@ -229,7 +229,16 @@ instance Monoid (TestCases a) where
 
 instance Applicative TestCases where
   pure = testCase
-  (<*>) = ap
+
+  --  Apply each function to the entire argument generator and interleave results.
+  --
+  --  Written as @'foldMap' ('fmap' f) fs@ rather than @'ap'@, this avoids the
+  --  inner @'foldMap' ('pure' . f)@ that @'ap'@ would generate: instead of
+  --  wrapping each @f x@ in a singleton and then immediately unwrapping it
+  --  via @'<>'@, we apply @f@ to the whole @xs@ list in one @'map'@ pass.
+  --  The outer @'foldMap'@ then interleaves those result lists with @'<>'@.
+  --
+  TestCases fs <*> xs = foldMap (`fmap` xs) fs
 
 {- | Bind via 'foldMap', which accumulates results with the interleaving '<>'.
 

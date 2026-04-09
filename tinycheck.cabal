@@ -29,11 +29,27 @@ flag dev
   default: False
   manual: True
 
+flag dump-core
+  description: Emit GHC Core output (.dump-simpl files) for inspection
+  default: False
+  manual: True
+
 common opts
   ghc-options: -Wall
 
   if flag(dev)
     ghc-options: -Werror
+
+  if flag(dump-core)
+    ghc-options:
+      -ddump-simpl
+      -ddump-to-file
+      -dsuppress-coercions
+      -dsuppress-type-applications
+      -dsuppress-idinfo
+      -dsuppress-module-prefixes
+      -dppr-case-as-let
+      -O2
   default-extensions:
     DataKinds
     DefaultSignatures
@@ -45,11 +61,9 @@ common opts
     TypeFamilies
 
   default-language: GHC2021
-  build-depends: base >=4.17 && <4.22
-
-common test-opts
-  import: opts
-  build-depends: tasty >=1.5 && <1.6
+  build-depends:
+    base >=4.17 && <4.22,
+    tasty >=1.5 && <1.6,
 
 library
   import: opts
@@ -60,12 +74,12 @@ library
   build-depends:
     generics-sop >=0.5 && <0.6,
     tagged >=0.8 && <0.9,
-    tasty >=1.5 && <1.6,
+    transformers >=0.5.6.2 && <0.7,
 
   hs-source-dirs: src
 
 test-suite tinycheck-test
-  import: test-opts
+  import: opts
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
@@ -86,8 +100,18 @@ test-suite example-colour
   build-depends: tinycheck
 
 test-suite example-tree
-  import: test-opts
+  import: opts
   type: exitcode-stdio-1.0
   hs-source-dirs: examples
   main-is: Tree.hs
   build-depends: tinycheck
+
+benchmark tinycheck-bench
+  import: opts
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: Main.hs
+  build-depends:
+    deepseq >=1.4 && <1.6,
+    tasty-bench >=0.3 && <0.5,
+    tinycheck,

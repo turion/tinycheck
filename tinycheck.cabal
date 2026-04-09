@@ -89,3 +89,13 @@ test-suite example-tree
   hs-source-dirs: examples
   main-is: Tree.hs
   build-depends: tinycheck
+
+benchmark tinycheck-bench
+  import: opts
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: Main.hs
+  build-depends:
+    deepseq >=1.4 && <1.6,
+    tasty-bench >=0.3 && <0.5,
+    tinycheck,

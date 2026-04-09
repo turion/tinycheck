@@ -29,11 +29,27 @@ flag dev
   default: False
   manual: True
 
+flag dump-core
+  description: Emit GHC Core output (.dump-simpl files) for inspection
+  default: False
+  manual: True
+
 common opts
   ghc-options: -Wall
 
   if flag(dev)
     ghc-options: -Werror
+
+  if flag(dump-core)
+    ghc-options:
+      -ddump-simpl
+      -ddump-to-file
+      -dsuppress-coercions
+      -dsuppress-type-applications
+      -dsuppress-idinfo
+      -dsuppress-module-prefixes
+      -dppr-case-as-let
+      -O2
   default-extensions:
     DataKinds
     DefaultSignatures

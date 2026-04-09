@@ -645,29 +645,6 @@ by case-splitting on the structure of @a@.
 class CoArbitrary a where
   coArbitrary :: (Arbitrary b) => TestCases (a -> b)
 
--- Base CoArbitrary instances; all use the newtype wrappers above rather than
--- 'const', so that generated functions actually vary on their argument.
-instance CoArbitrary () where
-  coArbitrary = (\b () -> b) <$> arbitrary
-
-instance CoArbitrary Bool where
-  coArbitrary = do
-    t <- arbitrary
-    f <- arbitrary
-    pure $ \case
-      True -> t
-      False -> f
-
-instance CoArbitrary Ordering where
-  coArbitrary = do
-    lt <- arbitrary
-    eq <- arbitrary
-    gt <- arbitrary
-    pure $ \case
-      LT -> lt
-      EQ -> eq
-      GT -> gt
-
 -- Integral types: split on sign × parity via 'IntegralCoArbitrary',
 -- also combined with 'OrdCoArbitrary' for pivot-based splitting.
 deriving via IntegralCoArbitrary Int instance CoArbitrary Int
@@ -766,6 +743,12 @@ instance (CoArbitrary (SOP.NS (SOP.NP f) xss)) => CoArbitrary (SOP.SOP f xss) wh
 --
 -- Instances for 'Generic' types are derived via 'Generically'.
 -- Instances for types without 'Generic' are written manually.
+
+deriving via Generically () instance CoArbitrary ()
+
+deriving via Generically Bool instance CoArbitrary Bool
+
+deriving via Generically Ordering instance CoArbitrary Ordering
 
 -- ** Data.Void
 

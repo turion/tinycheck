@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: tinycheck
-version: 0.1.0.0
+version: 0.2.0
 synopsis: A lightweight enumeration-based property testing library
 description:
   Tinycheck is a deterministic property testing library.

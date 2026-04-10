@@ -1,5 +1,9 @@
 # Revision history for tinycheck
 
-## 0.1.0.0 -- YYYY-mm-dd
+## 0.2.0
 
-* First version. Released on an unsuspecting world.
+* Improved Tasty integration
+
+## 0.1.0.0
+
+* First version.
